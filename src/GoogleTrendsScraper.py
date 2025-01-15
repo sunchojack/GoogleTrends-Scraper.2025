@@ -13,14 +13,13 @@ from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
-from six import binary_type
 from webdriver_manager.chrome import ChromeDriverManager
 
 import datetime as dt
 
-
 # Name of the download file created by Google Trends
-NAME_DOWNLOAD_FILE = f'multiTimeline_{dt.datetime.now().strftime("%Y-%m-%d_%H-%M")}.csv'
+# NAME_DOWNLOAD_FILE = f'multiTimeline_{dt.datetime.now().strftime("%Y-%m-%d_%H-%M")}.csv'
+NAME_DOWNLOAD_FILE = f'multiTimeline.csv'
 # Max number of consecutive daily observations scraped in one go
 MAX_NUMBER_DAILY_OBS = 100
 # Max number of simultaneous keywords scraped
@@ -81,13 +80,22 @@ def concat_data(data_list, data_all, keywords, frequency):
     # Rescale the daily trends based on the data at the lower frequency
     data_list = [scale_trend(x, data_all, frequency) for x in data_list]
     # Combine the single trends that were scraped:
-    data = reduce((lambda x, y: x.combine_first(y)), data_list)
-    # Find the maximal value across keywords and time
+    # data = reduce((lambda x, y: x.combine_first(y)), data_list)
+
+    if data_list:  # Check if the list is not empty
+        data = reduce((lambda x, y: x.combine_first(y)), data_list)
+    else:
+        print("Data list is empty, cannot combine trends")
+        data = pd.DataFrame()
+        # Find the maximal value across keywords and time
     max_value = data.max().max()
     # Rescale the trends by the maximal value, i.e. such that the largest value across keywords and time is 100
     data = 100 * data / max_value
-    # Rename the columns
-    data.columns = keywords
+    if data.empty:
+        print("Data is empty, skipping column renaming.")
+    else:
+        data.columns = keywords
+
     return data
 
 
@@ -235,7 +243,8 @@ def floor_end_month(date):
 
 
 class GoogleTrendsScraper:
-    def __init__(self, sleep=1, path_driver=None, binary_path=None,
+    def __init__(self, sleep=1,
+                 path_driver=None,
                  headless=True, date_format='%Y-%m-%d',
                  output_folder="out"):
         """
@@ -260,13 +269,16 @@ class GoogleTrendsScraper:
             print(f"Using existing folder: {folder_path}")
 
         self.download_path = folder_path
+        self.download_path = os.path.abspath(self.download_path)  # Convert to absolute path
+        print(f"Download path (absolute): {self.download_path}")
+
         # Define the path to the downloaded csv-files (this is where the trends are saved)
         self.filename = os.path.join(self.download_path, NAME_DOWNLOAD_FILE)
         # Whether the browser should be opened in headless mode
         self.headless = headless
         # Path to the driver of Google Chrome
         self.path_driver = path_driver
-        self.binary_path = binary_path
+        # self.binary_path = binary_path
         # Initialize the browser variable
         self.browser = None
         # Sleep time used during the scraping procedure
@@ -281,58 +293,47 @@ class GoogleTrendsScraper:
         self.start_browser()
 
     def start_browser(self):
-        """
-        Method that initializes a selenium browser using the chrome driver
-
-        """
-
         if self.browser is not None:
             print('Browser already running')
-            pass
+            return
 
-        # self.browser = webdriver.Chrome(service=service)
-
-        chrome_options = webdriver.ChromeOptions()
-        if self.binary_path:
-            chrome_options.binary_location = self.binary_path
-
-        chrome_options.add_experimental_option('prefs', {'intl.accept_languages': 'en,en_US'})
-        if self.headless:
-            chrome_options.add_argument('--headless')
-            chrome_options.add_argument('window-size=1920x1080')
-        if self.path_driver is None:
-            self.path_driver = 'chromedriver'
-
-        # If the browser is already running, do not start a new one
-        if self.browser is not None:
-            print('Browser already running')
-            pass
-
-        # Options for the browser
-        chrome_options = webdriver.ChromeOptions()
-        # Define browser language
-        chrome_options.add_experimental_option('prefs', {'intl.accept_languages': 'en,en_US'})
-        # If the browser should be run in headless mode
-        if self.headless:
-            chrome_options.add_argument('--headless')
-            chrome_options.add_argument('window-size=1920x1080')
-
-        if self.path_driver is None:
-            if self.binary_path is None:
-                # service = Service(ChromeDriverManager().install())
-                # print('No binary and driver path. Using preinstalled Chrome default.')
-                exit(111)
+        if not os.path.exists(self.download_path):
+            print(f"Download path does not exist: {self.download_path}")
+            exit(1)
         else:
-            service = Service(self.path_driver)
+            print(f"Using download path: {self.download_path}")
 
+        chrome_options = webdriver.ChromeOptions()
+
+        print("Current Chrome options:", chrome_options.arguments)
+        print("Chrome options:", chrome_options.to_capabilities())
+
+        if self.headless == False:
+            print('>>> Non-headless will not work, switching to headless! <<<')
+            self.headless = True
+
+        if self.headless == True:  # safeguard
+            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('window-size=1920x1080')
+
+        # Set preferences for language and download settings in a single block
+        chrome_options.add_experimental_option('prefs', {
+            'intl.accept_languages': 'en,en_US',
+            'download.default_directory': str(self.download_path),  # Set the download path correctly
+            'download.prompt_for_download': False,  # Disable the download prompt
+            'download.directory_upgrade': True  # Allow download directory changes
+        })
+
+        if self.path_driver is None:
+            print('ChromeDriver path not found, exiting...')
+            exit(1)
+
+        service = Service(self.path_driver)
         self.browser = webdriver.Chrome(service=service, options=chrome_options)
 
-        # Define the download behaviour of chrome
-        # noinspection PyProtectedMember
-        # self.browser.command_executor._commands["send_command"] = (
-        #     "POST", '/session/$sessionId/chromium/send_command')
-        # self.browser.execute("send_command", {'cmd': 'Page.setDownloadBehavior', 'params':
-        #                                       {'behavior': 'allow', 'downloadPath': self.download_path.name}})
+        print("Browser started successfully")
+        print("Temp Chrome options:", chrome_options.arguments)
+        print("Chrome options:", chrome_options.to_capabilities())
 
     def quit_browser(self):
         """
@@ -372,7 +373,7 @@ class GoogleTrendsScraper:
             # Get the trends over the entire sample:
             url_all_i = self.create_url(keywords_i,
                                         previous_weekday(start_datetime, 0), next_weekday(
-                                            end_datetime, 6),
+                    end_datetime, 6),
                                         region, category)
             data_all_i, frequency_i = self.get_data(url_all_i)
             # If the data for the entire sample is already at the daily frequency we are done. Otherwise we need to
@@ -416,7 +417,7 @@ class GoogleTrendsScraper:
         for x in range(int(num_subperiods)):
             start_sub = start + timedelta(days=x * num_days_in_subperiod)
             end_sub = start + \
-                timedelta(days=(x + 1) * num_days_in_subperiod - 1)
+                      timedelta(days=(x + 1) * num_days_in_subperiod - 1)
             if end_sub > end:
                 end_sub = end
             if start_sub < end:
@@ -472,18 +473,18 @@ class GoogleTrendsScraper:
                 self.go_to_url(url)
                 # Sleep the code by the defined time plus a random number of seconds between 0s and 2s. This should
                 # reduce the likelihood that Google detects us as a scraper
-                time.sleep(self.sleep*(1+np.random.rand()))
+                time.sleep(self.sleep * (1 + np.random.rand()))
                 # Try to find the button and click it
                 line_chart = self.browser.find_element(By.CSS_SELECTOR,
-                    "widget[type='fe_line_chart']")
+                                                       "widget[type='fe_line_chart']")
                 button = line_chart.find_element(By.CSS_SELECTOR,
-                    '.widget-actions-item.export')
+                                                 '.widget-actions-item.export')
                 button.click()
             except exceptions.NoSuchElementException:
                 # If the button cannot be found, try again (load page, ...)
                 pass
         # After downloading, wait again to allow the file to be downloaded
-        time.sleep(self.sleep*(1+np.random.rand()))
+        time.sleep(self.sleep * (1 + np.random.rand()))
         # Load the data from the csv-file as pandas.DataFrame object
         data = pd.read_csv(self.filename, skiprows=1)
         # Set date as index:
@@ -500,13 +501,15 @@ class GoogleTrendsScraper:
             data = data.set_index("Month")
             frequency = 'Monthly'
         # Sleep again
-        time.sleep(self.sleep*(1+np.random.rand()))
-        # Delete the file
+        time.sleep(self.sleep * (1 + np.random.rand()))
+
+        # Delete the intermediary file
         while os.path.exists(self.filename):
             try:
                 os.remove(self.filename)
             except:
                 pass
+
         return data, frequency
 
     def go_to_url(self, url):

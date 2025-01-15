@@ -1,16 +1,31 @@
 import os
+import datetime as dt
 
 from src.GoogleTrendsScraper import GoogleTrendsScraper
 
-# gts = GoogleTrendsScraper(sleep=5, path_driver=os.environ['CHROMEDRIVER'], headless=True)
-gts = GoogleTrendsScraper(sleep=5, headless=False,
-                          binary_path='ASSETS/BraveSoftware/Brave-Browser/Application/brave-browser',
-                          path_driver='ASSETS/BRAVE_Chromedriver/chromedriver-win64/chromedriver-win64/chromedriver.exe')
+
+output_folder_in = 'out'
+
+gts = GoogleTrendsScraper(sleep=5, path_driver='ASSETS/BRAVE_Chromedriver/chromedriver-win64/chromedriver-win64/chromedriver.exe',
+                          output_folder=output_folder_in)
 
 # gts = GoogleTrendsScraper(sleep=5, headless=False)
 
-data = gts.get_trends('foo', '2018-07-02', '2019-04-02', 'US')
+startdate, enddate = '2024-01-01', '2024-01-02'
+keyword_in = 'chatgpt'
+region_in = 'US'
 
-print(data)
+data = gts.get_trends(keyword_in, start=startdate, end=enddate, region=region_in)
+
+creation_date = dt.datetime.now().strftime("%m_%d_%Y_%H_%M")
+
+try:
+    data.to_csv(f'{output_folder_in}/{keyword_in}_{region_in}_{creation_date}.csv', index=False)
+except Exception as datasave_error:
+    print(datasave_error)
 
 del gts
+
+
+# add logging, add progress bar
+# add iter over iso2
