@@ -1,21 +1,28 @@
-import pandas as pd
-import time
-import numpy as np
 import math
-from selenium import webdriver
-from selenium.common import exceptions
-from selenium.webdriver.common.by import By
 import os
-from datetime import datetime, timedelta
-from functools import reduce
 import re
 import tempfile
+import time
+from datetime import datetime, timedelta
+from functools import reduce
+
+import numpy as np
+import pandas as pd
+from selenium import webdriver
+
+from selenium.common import exceptions
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from six import binary_type
+from webdriver_manager.chrome import ChromeDriverManager
+
+import datetime as dt
 
 
 # Name of the download file created by Google Trends
-NAME_DOWNLOAD_FILE = 'multiTimeline.csv'
+NAME_DOWNLOAD_FILE = f'multiTimeline_{dt.datetime.now().strftime("%Y-%m-%d_%H-%M")}.csv'
 # Max number of consecutive daily observations scraped in one go
-MAX_NUMBER_DAILY_OBS = 200
+MAX_NUMBER_DAILY_OBS = 100
 # Max number of simultaneous keywords scraped
 MAX_KEYWORDS = 5
 
@@ -228,7 +235,9 @@ def floor_end_month(date):
 
 
 class GoogleTrendsScraper:
-    def __init__(self, sleep=1, path_driver=None, headless=True, date_format='%Y-%m-%d'):
+    def __init__(self, sleep=1, path_driver=None, binary_path=None,
+                 headless=True, date_format='%Y-%m-%d',
+                 output_folder="out"):
         """
         Constructor of the Google-Scraper-Class
         Args:
@@ -242,13 +251,22 @@ class GoogleTrendsScraper:
         # Current directory
         self.dir = os.getcwd()
         # Define download folder for browser:
-        self.download_path = tempfile.TemporaryDirectory()
+        folder_path = output_folder if output_folder else os.path.join(self.dir, self.output_folder)
+
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+            print(f"Created folder: {folder_path}")
+        else:
+            print(f"Using existing folder: {folder_path}")
+
+        self.download_path = folder_path
         # Define the path to the downloaded csv-files (this is where the trends are saved)
-        self.filename = os.path.join(self.download_path.name, NAME_DOWNLOAD_FILE)
+        self.filename = os.path.join(self.download_path, NAME_DOWNLOAD_FILE)
         # Whether the browser should be opened in headless mode
         self.headless = headless
         # Path to the driver of Google Chrome
         self.path_driver = path_driver
+        self.binary_path = binary_path
         # Initialize the browser variable
         self.browser = None
         # Sleep time used during the scraping procedure
@@ -267,10 +285,29 @@ class GoogleTrendsScraper:
         Method that initializes a selenium browser using the chrome driver
 
         """
+
+        if self.browser is not None:
+            print('Browser already running')
+            pass
+
+        # self.browser = webdriver.Chrome(service=service)
+
+        chrome_options = webdriver.ChromeOptions()
+        if self.binary_path:
+            chrome_options.binary_location = self.binary_path
+
+        chrome_options.add_experimental_option('prefs', {'intl.accept_languages': 'en,en_US'})
+        if self.headless:
+            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('window-size=1920x1080')
+        if self.path_driver is None:
+            self.path_driver = 'chromedriver'
+
         # If the browser is already running, do not start a new one
         if self.browser is not None:
             print('Browser already running')
             pass
+
         # Options for the browser
         chrome_options = webdriver.ChromeOptions()
         # Define browser language
@@ -279,18 +316,23 @@ class GoogleTrendsScraper:
         if self.headless:
             chrome_options.add_argument('--headless')
             chrome_options.add_argument('window-size=1920x1080')
-        # If no path for the chrome drive is defined, the default is used, i.e. path variables are checked
+
         if self.path_driver is None:
-            self.path_driver = 'chromedriver'
-        # Start the browser
-        self.browser = webdriver.Chrome(
-            executable_path=self.path_driver, chrome_options=chrome_options)
+            if self.binary_path is None:
+                # service = Service(ChromeDriverManager().install())
+                # print('No binary and driver path. Using preinstalled Chrome default.')
+                exit(111)
+        else:
+            service = Service(self.path_driver)
+
+        self.browser = webdriver.Chrome(service=service, options=chrome_options)
+
         # Define the download behaviour of chrome
         # noinspection PyProtectedMember
-        self.browser.command_executor._commands["send_command"] = (
-            "POST", '/session/$sessionId/chromium/send_command')
-        self.browser.execute("send_command", {'cmd': 'Page.setDownloadBehavior', 'params':
-                                              {'behavior': 'allow', 'downloadPath': self.download_path.name}})
+        # self.browser.command_executor._commands["send_command"] = (
+        #     "POST", '/session/$sessionId/chromium/send_command')
+        # self.browser.execute("send_command", {'cmd': 'Page.setDownloadBehavior', 'params':
+        #                                       {'behavior': 'allow', 'downloadPath': self.download_path.name}})
 
     def quit_browser(self):
         """
@@ -484,5 +526,5 @@ class GoogleTrendsScraper:
         When deleting an instance of this class, delete the temporary file folder and close the browser
 
         """
-        self.download_path.cleanup()
+        # self.download_path.cleanup()
         self.quit_browser()
