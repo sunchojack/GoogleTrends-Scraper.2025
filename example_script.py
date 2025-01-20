@@ -4,6 +4,21 @@ import pycountry
 
 from src.GoogleTrendsScraper import GoogleTrendsScraper
 
+from twisted.web import proxy, http
+from twisted.internet import reactor
+from twisted.python import log
+import sys
+
+log.startLogging(sys.stdout)
+
+
+class ProxyFactory(http.HTTPFactory):
+    protocol = proxy.Proxy
+
+
+reactor.listenTCP(8080, ProxyFactory())
+reactor.run()
+
 
 class ISO2CodeGetter:
     def __init__(self):
@@ -34,7 +49,7 @@ for keyword_in in keywords:
                                       output_folder=output_folder_in)
 
             # data = gts.get_trends(keyword_in, start=startdate, end=enddate, region=region_in)
-            data = gts.get_trends(keyword_in, start=startdate, end=enddate, region='US')
+            data = gts.get_trends(keyword_in, start=startdate, end=enddate, region=region_in)
 
             creation_date = dt.datetime.now().strftime("%m_%d_%Y_%H_%M")
 
@@ -49,6 +64,3 @@ for keyword_in in keywords:
             print(loop_error)
             del gts
             pass
-
-
-# add logging, add progress bar
