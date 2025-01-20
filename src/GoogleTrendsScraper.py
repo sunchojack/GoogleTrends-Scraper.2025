@@ -16,8 +16,6 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
 import datetime as dt
-import logging
-logger = logging.getLogger(__name__)
 
 # Name of the download file created by Google Trends
 # NAME_DOWNLOAD_FILE = f'multiTimeline_{dt.datetime.now().strftime("%Y-%m-%d_%H-%M")}.csv'
@@ -264,9 +262,6 @@ class GoogleTrendsScraper:
         # Define download folder for browser:
         folder_path = output_folder if output_folder else os.path.join(self.dir, self.output_folder)
 
-        logging.basicConfig(filename='myapp.log', level=logging.INFO)
-        logging.info(f'Logging started. {dt.datetime.now()}')
-
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
             print(f"Created folder: {folder_path}")
@@ -330,7 +325,7 @@ class GoogleTrendsScraper:
         })
 
         if self.path_driver is None:
-            logging.critical('ChromeDriver path not found, exiting...')
+            print('ChromeDriver path not found, exiting...')
             exit(1)
 
         service = Service(self.path_driver)
@@ -377,8 +372,8 @@ class GoogleTrendsScraper:
         for keywords_i in get_chunks(keywords, MAX_KEYWORDS):
             # Get the trends over the entire sample:
             url_all_i = self.create_url(keywords_i,
-                                        previous_weekday(start_datetime, 0),
-                                        next_weekday(end_datetime, 6),
+                                        previous_weekday(start_datetime, 0), next_weekday(
+                    end_datetime, 6),
                                         region, category)
             data_all_i, frequency_i = self.get_data(url_all_i)
             # If the data for the entire sample is already at the daily frequency we are done. Otherwise we need to
@@ -421,7 +416,8 @@ class GoogleTrendsScraper:
             ((end - start).days + 1) / num_subperiods)
         for x in range(int(num_subperiods)):
             start_sub = start + timedelta(days=x * num_days_in_subperiod)
-            end_sub = start + timedelta(days=(x + 1) * num_days_in_subperiod - 1)
+            end_sub = start + \
+                      timedelta(days=(x + 1) * num_days_in_subperiod - 1)
             if end_sub > end:
                 end_sub = end
             if start_sub < end:
@@ -456,7 +452,6 @@ class GoogleTrendsScraper:
         date = f"date={start_string}%20{end_string}"
         # Construct the URL
         url = f"{base}?{cat}{date}&{geo}{query}"
-        logging.info(url)
         return url
 
     def get_data(self, url):
