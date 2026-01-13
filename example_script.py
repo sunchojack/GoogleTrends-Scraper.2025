@@ -1,12 +1,13 @@
 import os
 import datetime as dt
 
-from src.GoogleTrendsScraper import GoogleTrendsScraper
+from src.GoogleTrendsScraper_playwright import GoogleTrendsScraper
 
 
 output_folder_in = 'out'
 
-gts = GoogleTrendsScraper(sleep=5, path_driver='ASSETS/BRAVE_Chromedriver/chromedriver-win64/chromedriver-win64/chromedriver.exe',
+gts = GoogleTrendsScraper(sleep=5,
+                          # path_driver='ASSETS/BRAVE_Chromedriver/chromedriver-win64/chromedriver-win64/chromedriver.exe',
                           output_folder=output_folder_in)
 
 # gts = GoogleTrendsScraper(sleep=5, headless=False)
